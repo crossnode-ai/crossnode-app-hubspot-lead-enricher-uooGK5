@@ -1,103 +1,138 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.crossnode.ai";
+const AGENT_ID = "9e471e8b-7835-451c-acf3-bc6d628a06b2";
+
+interface AgentOutput {
+  result: string;
+}
+
+export default function Page() {
+  const [inputQuery, setInputQuery] = useState<string>("");
+  const [enrichmentResult, setEnrichmentResult] = useState<AgentOutput | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setInputQuery(event.target.value);
+    if (error) {
+      setError(null);
+    }
+  };
+
+  const runLeadEnrichmentAgent = async () => {
+    if (!inputQuery.trim()) {
+      setError("Please enter a query.");
+      toast. ("Please enter a query.", {
+        description: "Input cannot be empty."
+      });
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setEnrichmentResult(null);
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/agents/${AGENT_ID}/run`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_CROSSNODE_API_KEY}`
+        },
+        body: JSON.stringify({
+          input_data: { start_input: { input: inputQuery } } // Map UI input to agent's expected schema
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || response.statusText;
+        throw new Error(`Agent run failed: ${errorMessage}`);
+      }
+
+      const data = await response.json();
+      
+      // Validate output structure based on schema
+      if (data && data.output_data && typeof data.output_data.result === 'string') {
+        setEnrichmentResult(data.output_data);
+        toast.success("Lead enrichment successful!");
+      } else {
+        throw new Error("Invalid agent output format.");
+      }
+
+    } catch (err) {
+      console.error("Lead enrichment error:", err);
+      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
+      setError(errorMessage);
+      toast.error("Lead enrichment failed", {
+        description: errorMessage
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 md:p-24">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>HubSpot Lead Enricher</CardTitle>
+          <CardDescription>Enter lead details to enrich company data.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="lead-query">Lead Identifier (e.g., Email or Company Domain)</Label>
+              <Input 
+                id="lead-query" 
+                placeholder="example@company.com or company.com"
+                value={inputQuery}
+                onChange={handleInputChange}
+                disabled={loading}
+                aria-describedby="lead-query-error"
+              />
+              {error && (
+                <p id="lead-query-error" className="text-sm font-medium text-red-500 mt-2">
+                  {error}
+                </p>
+              )}
+            </div>
+            
+            <Button 
+              onClick={runLeadEnrichmentAgent} 
+              disabled={loading || !inputQuery.trim()}
+              className="w-full"
+            >
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Enriching...</span>
+                </div>
+              ) : (
+                <span>Enrich Lead</span>
+              )}
+            </Button>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+            {enrichmentResult && (
+              <div className="mt-6 p-4 border rounded-md bg-gray-50 dark:bg-gray-800">
+                <h3 className="text-lg font-semibold mb-2">Enrichment Result:</h3>
+                <p className="text-sm text-gray-700 dark:text-gray-300 break-words">
+                  {enrichmentResult.result}
+                </p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </main>
   );
 }
